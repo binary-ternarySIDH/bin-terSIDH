@@ -6,6 +6,7 @@ from montgomery_isogeny import KummerLineIsogenyComposite
 from utilities import torsion_basis
 
 proof.all(False)
+random.seed(int(42))
 
 lam = 128
 ternary = True
@@ -13,17 +14,16 @@ ternary = True
 for arg in sys.argv[1:]:
     if arg.lower() in ["--192"]:
         lam = 192
-    elif  arg.lower() in ["--256"]:
+        break
+    elif arg.lower() in ["--256"]:
         lam = 256
-    else:
-        lam = 128
+        break
 
 
 for arg in sys.argv[1:]:
     if arg.lower() in ["--bin", "--binary"]:
         ternary = False
-    else:
-        ternary = True
+        break
 
 params_binSIDH = [203, 296, 387]
 params_terSIDH = [156, 226, 293]
@@ -136,7 +136,17 @@ def keygenA():
     phiA = KummerLineIsogenyComposite(E0, xK, A)
     EA = phiA.codomain()
 
-    return skA, (EA, phiA(xPB), phiA(xQB), phiA(xPQB))
+    # Generate the masking values
+    mask = B
+    while gcd(mask, B) != 1:
+        mask = random.randint(0, B)
+    mask_inv = 1/mask % B
+
+    # Scale the torsion images
+    xR = mask * phiA(xPB)
+    xS = mask_inv * phiA(xQB)
+
+    return skA, (EA, xR, xS)
 
 def keygenB():
     # Generate the secret data
@@ -181,7 +191,7 @@ def sharedA(skA, pkB):
 def sharedB(skB, pkA):
     # Parse the private/public keys
     (B0, B1, order0, order1) = skB
-    (EA, RB, SB, RSB) = pkA
+    (EA, RB, SB) = pkA
     
     # Compute the isogeny kernels
     xK0 = RB * B0

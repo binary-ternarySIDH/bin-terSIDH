@@ -15,17 +15,15 @@ ternary = True
 for arg in sys.argv[1:]:
     if arg.lower() in ["--192"]:
         lam = 192
-    elif  arg.lower() in ["--256"]:
+        break
+    elif arg.lower() in ["--256"]:
         lam = 256
-    else:
-        lam = 128
+        break
 
 for arg in sys.argv[1:]:
     if arg.lower() in ["--bin", "--binary"]:
         ternary = False
-    else:
-        ternary = True
-
+        break
 
 params_binSIDH = [134, 192, 256]
 params_terSIDH = [93, 128, 162]
@@ -122,19 +120,16 @@ elif A//2 * QA == E0(0, 0):
 assert A//2 * PA != E0(0, 0) and A//2 * QA != E0(0, 0)
 
 
-PQA = PA - QA
-PQB = PB - QB
-
 E0 = KummerLine(E0)
-xPA, xQA, xPQA = E0(PA[0]), E0(QA[0]), E0(PQA[0])
-xPB, xQB, xPQB = E0(PB[0]), E0(QB[0]), E0(PQB[0])
+xPA, xQA = E0(PA[0]), E0(QA[0])
+xPB, xQB = E0(PB[0]), E0(QB[0])
 
 
 
 def keygen(A_points, B_points, Alice=True):
     # Extract Kummer points
-    xP, xQ, xPQ = A_points
-    xR, xS, xRS = B_points
+    xP, xQ = A_points
+    xR, xS = B_points
 
     # Generate the secret data
     sk = random.choices(sk_choices, k=t)
@@ -150,18 +145,29 @@ def keygen(A_points, B_points, Alice=True):
     xK1 = phi0(xK1)
 
     # Evaluate action on aux data
-    xR, xS, xRS = phi0(xR), phi0(xS), phi0(xRS)
+    xR, xS = phi0(xR), phi0(xS)
 
     # Compute the second isogeny from the codomain of phi0
     E1 = phi0.codomain()
     phi1 = KummerLineIsogenyComposite(E1, xK1, order1)
 
     # Evaluate action on aux data
-    xR, xS, xRS = phi1(xR), phi1(xS), phi1(xRS)
+    xR, xS = phi1(xR), phi1(xS)
+
+    # Generate the masking values
+    modulus = B if Alice else A # modulus is the order of torsion points
+    mask = modulus
+    while gcd(mask, modulus) != 1:
+        mask = random.randint(0, modulus)
+    mask_inv = 1/mask % modulus
+
+    # Scale the torsion images
+    xR = mask * xR
+    xS = mask_inv * xS
 
     # Compute the public data
     E1 = phi1.codomain()
-    pk = (E1, xR, xS, xRS)
+    pk = (E1, xR, xS)
 
     return sk, pk
 
@@ -169,7 +175,7 @@ def keygen(A_points, B_points, Alice=True):
 def shared(sk, pk):
     # Parse the private/public keys
     B0, B1, order0, order1 = skA
-    E, xR, xS, xRS = pkB
+    E, xR, xS = pkB
     
     # Compute the isogeny kernels
     xK0 = xR * B0
@@ -192,11 +198,11 @@ tt = [0, 0, 0, 0]
 
 for _ in range(N):
     t0 = time.process_time_ns()
-    skA, pkA = keygen((xPA, xQA, xPQA), (xPB, xQB, xPQB), Alice=True)
+    skA, pkA = keygen((xPA, xQA), (xPB, xQB), Alice=True)
     tt[0] += time.process_time_ns() - t0
 
     t0 = time.process_time_ns()
-    skB, pkB = keygen((xPB, xQB, xPQB), (xPA, xQA, xPQA), Alice=False)
+    skB, pkB = keygen((xPB, xQB), (xPA, xQA), Alice=False)
     tt[1] += time.process_time_ns() - t0
 
     t0 = time.process_time_ns()
